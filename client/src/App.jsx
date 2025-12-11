@@ -1,25 +1,45 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import axios from 'axios';
 import './App.css';
 
 function App() {
   const [file, setFile] = useState(null);
+  const [filename, setFilename] = useState("");
   const [jobRole, setJobRole] = useState('');
   const [location, setLocation] = useState('');
   const [jobs, setJobs] = useState([]);
   const [selectedJob, setSelectedJob] = useState(null);
   const [loading, setLoading] = useState(false);
+  
+  // AI Analysis State
+  const [analysisResult, setAnalysisResult] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  
+  // Ref for auto-scrolling to results
+  const resultsRef = useRef(null);
 
-  // File Upload Handler
-  const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
+  // 1. Upload Resume
+  const handleFileChange = async (e) => {
+    const selectedFile = e.target.files[0];
+    setFile(selectedFile);
+    
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    try {
+      const res = await axios.post('http://localhost:8000/upload-resume', formData);
+      setFilename(res.data.filename);
+    } catch (err) {
+      alert("Backend error: Is python running?");
+    }
   };
 
-  // Job Search Handler
+  // 2. Search Jobs
   const searchJobs = async () => {
-    if (!jobRole) return alert("Please enter a job role");
+    if (!jobRole) return alert("Enter a job role");
     setLoading(true);
-    setSelectedJob(null); // Reset selection on new search
+    setJobs([]);
+    setSelectedJob(null);
+    setAnalysisResult(null);
     
     const formData = new FormData();
     formData.append('role', jobRole);
@@ -31,132 +51,167 @@ function App() {
       setJobs(res.data.jobs);
     } catch (err) {
       console.error(err);
-      alert("Backend connection failed. Make sure python main.py is running.");
     }
     setLoading(false);
+  };
+
+  // 3. Run AI Analysis (Connected to all 4 Buttons)
+  const runAnalysis = async () => {
+    if (!filename) return alert("Please upload a resume first!");
+    if (!selectedJob) return alert("Please select a job first!");
+    
+    setAnalyzing(true);
+    setAnalysisResult(null); // Clear old results
+
+    const formData = new FormData();
+    formData.append('filename', filename);
+    formData.append('job_title', selectedJob.title);
+    formData.append('job_desc', selectedJob.snippet);
+
+    try {
+      const res = await axios.post('http://localhost:8000/analyze-match', formData);
+      setAnalysisResult(res.data);
+      
+      // Auto-scroll to results after short delay
+      setTimeout(() => {
+        resultsRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+      
+    } catch (err) {
+      alert("Analysis failed. Check console.");
+      console.error(err);
+    }
+    setAnalyzing(false);
   };
 
   return (
     <div className="app-container">
       <header>
-        {/* CHANGED NAME HERE */}
         <h1>🔥 ResumeMatch AI</h1>
         <p className="subtitle">AI-Powered Resume Matcher & Career Architect</p>
       </header>
 
-      {/* Top Section: Split into Upload and Search */}
+      {/* Top Section */}
       <div className="top-section">
         
-        {/* Left Col: Upload */}
+        {/* Upload Card */}
         <div className="card">
           <h2>1. Upload Resume</h2>
           <div className="upload-zone">
-            <input 
-              type="file" 
-              id="file-upload" 
-              onChange={handleFileChange} 
-              accept=".pdf" 
-              style={{display: 'none'}} 
-            />
-            <label htmlFor="file-upload" style={{cursor: 'pointer'}}>
-              <span style={{fontSize: '30px'}}>📄</span>
-              <p>
-                {file ? <strong>{file.name}</strong> : "Click to Upload PDF Resume"}
-              </p>
+            <input type="file" id="u-file" onChange={handleFileChange} accept=".pdf" style={{display:'none'}}/>
+            <label htmlFor="u-file">
+              <span style={{fontSize:'3rem'}}>📄</span>
+              <p>{file ? <b style={{color:'green'}}>{file.name}</b> : "Click to Upload PDF"}</p>
             </label>
           </div>
         </div>
 
-        {/* Right Col: Job Search */}
+        {/* Search Card */}
         <div className="card">
           <h2>2. Find Your Target Job</h2>
           <div className="search-bar">
-            <input 
-              placeholder="Job Role (e.g. Data Scientist)" 
-              value={jobRole} 
-              onChange={(e) => setJobRole(e.target.value)} 
-              onKeyPress={(e) => e.key === 'Enter' && searchJobs()}
-            />
-            <input 
-              placeholder="Location (e.g. Bangalore)" 
-              value={location} 
-              onChange={(e) => setLocation(e.target.value)} 
-              onKeyPress={(e) => e.key === 'Enter' && searchJobs()}
-            />
+            <input placeholder="Job Role (e.g. Data Scientist)" value={jobRole} onChange={e=>setJobRole(e.target.value)} onKeyPress={e=>e.key==='Enter'&&searchJobs()}/>
+            <input placeholder="Location" value={location} onChange={e=>setLocation(e.target.value)} onKeyPress={e=>e.key==='Enter'&&searchJobs()}/>
             <button className="primary-btn" onClick={searchJobs} disabled={loading}>
-              {loading ? "Searching..." : "Search"}
+              {loading ? "..." : "Search"}
             </button>
           </div>
 
-          {/* Job Results List */}
           <div className="job-results-container">
-            {jobs.length === 0 && !loading && (
-              <p style={{textAlign: 'center', color: '#999', marginTop: '20px'}}>
-                No jobs searched yet. Try searching above!
-              </p>
-            )}
-            
-            {jobs.map((job) => (
-              <div 
-                key={job.id} 
-                className={`job-card ${selectedJob?.id === job.id ? 'selected' : ''}`}
-                onClick={() => setSelectedJob(job)}
-              >
-                <div className="job-info">
-                  <h3>{job.title}</h3>
-                  <p style={{fontSize: '13px', color: '#666', margin: '4px 0'}}>{job.snippet.substring(0, 60)}...</p>
-                </div>
-                <div style={{textAlign: 'right'}}>
+             {jobs.length === 0 && !loading && <p style={{textAlign:'center', color:'#999'}}>Jobs will appear here...</p>}
+             {jobs.map(job => (
+               <div key={job.id} className={`job-card ${selectedJob?.id === job.id ? 'selected' : ''}`} onClick={() => setSelectedJob(job)}>
+                  <div className="job-info">
+                    <h3>{job.title}</h3>
+                    <p style={{fontSize:'0.8rem', color:'#666'}}>{job.snippet.substring(0,60)}...</p>
+                  </div>
                   <span className={`badge ${job.source}`}>{job.source}</span>
-                  <br/>
-                  <a 
-                    href={job.link} 
-                    target="_blank" 
-                    rel="noreferrer" 
-                    style={{fontSize: '11px', color: '#999', textDecoration: 'none', display: 'block', marginTop: '5px'}}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    View ↗
-                  </a>
-                </div>
-              </div>
-            ))}
+               </div>
+             ))}
           </div>
         </div>
       </div>
 
-      {/* Bottom Section: Analysis Dashboard */}
+      {/* ANALYSIS SECTION */}
       {selectedJob && (
         <div className="card analysis-section">
           <h2 style={{textAlign: 'center', borderBottom: 'none'}}>
             Analyze match for: <span style={{color: '#ff4500'}}>{selectedJob.title}</span>
           </h2>
           
+          {/* The 4 Buttons */}
           <div className="analysis-grid">
-            <div className="analysis-option" onClick={() => alert("Calculating Probability...")}>
+            <div className="analysis-option" onClick={runAnalysis}>
               <span className="icon">📊</span>
               <h3>Selection Probability</h3>
-              <p style={{fontSize: '12px', color: '#666'}}>Predict your hiring chance</p>
+              <p style={{fontSize: '14px', color: '#666'}}>Predict hiring chance</p>
             </div>
             
-            <div className="analysis-option" onClick={() => alert("Detecting Gaps...")}>
+            <div className="analysis-option" onClick={runAnalysis}>
               <span className="icon">🧩</span>
               <h3>Skill Gap Detection</h3>
-              <p style={{fontSize: '12px', color: '#666'}}>Find missing keywords</p>
+              <p style={{fontSize: '14px', color: '#666'}}>Find missing keywords</p>
             </div>
             
-            <div className="analysis-option" onClick={() => alert("Suggesting Improvements...")}>
+            <div className="analysis-option" onClick={runAnalysis}>
               <span className="icon">📝</span>
               <h3>Resume Improver</h3>
-              <p style={{fontSize: '12px', color: '#666'}}>Rewrite weak bullet points</p>
+              <p style={{fontSize: '14px', color: '#666'}}>Rewrite weak points</p>
             </div>
             
-            <div className="analysis-option" onClick={() => alert("Generating Roadmap...")}>
+            <div className="analysis-option" onClick={runAnalysis}>
               <span className="icon">🚀</span>
               <h3>Learning Roadmap</h3>
-              <p style={{fontSize: '12px', color: '#666'}}>Personalized course plan</p>
+              <p style={{fontSize: '14px', color: '#666'}}>Generate study plan</p>
             </div>
           </div>
+
+          {/* Loading Indicator */}
+          {analyzing && (
+             <div style={{textAlign:'center', marginTop:'30px', fontSize:'1.2rem', color:'#ff4500', fontWeight:'bold'}}>
+               ⚡ Analyzing your resume...
+             </div>
+          )}
+
+          {/* RESULTS DASHBOARD */}
+          {analysisResult && (
+            <div className="results-container" ref={resultsRef}>
+              
+              {/* 1. Score */}
+              <div className="result-box score-box">
+                <div className="circle-chart">
+                  <span>{analysisResult.match_score}%</span>
+                </div>
+                <h3>Match Probability</h3>
+                <p>Based on keyword overlap (TF-IDF)</p>
+              </div>
+
+              {/* 2. Missing Skills */}
+              <div className="result-box missing-box">
+                <h3>⚠️ Missing Skills</h3>
+                <ul>
+                  {analysisResult.missing_skills.map((s,i) => <li key={i}>{s}</li>)}
+                </ul>
+              </div>
+
+              {/* 3. Improvements */}
+              <div className="result-box improve-box">
+                <h3>📝 Improvement Tips</h3>
+                <ul>
+                  {analysisResult.improvements.map((s,i) => <li key={i}>{s}</li>)}
+                </ul>
+              </div>
+
+              {/* 4. Roadmap */}
+              <div className="result-box roadmap-box">
+                <h3>🚀 Learning Roadmap</h3>
+                <ul>
+                  {analysisResult.roadmap.map((s,i) => <li key={i}>{s}</li>)}
+                </ul>
+              </div>
+
+            </div>
+          )}
         </div>
       )}
     </div>
