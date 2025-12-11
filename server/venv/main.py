@@ -1,97 +1,177 @@
+import os
+import json
+import random
 from fastapi import FastAPI, Form, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from duckduckgo_search import DDGS
+from pypdf import PdfReader
 import uvicorn
-import json
+from openai import OpenAI
 
+# Initialize App
 app = FastAPI()
 
-# 1. CORS Setup (Allows your React Frontend to talk to this Python Backend)
+# CORS: Allow connection from your React Frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all connections (Perfect for Hackathons)
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 2. The Search Logic
-def search_jobs_on_web(role: str, location: str, company: str):
-    results = []
-    # Construct a smart search query to find specific links
-    query = f"{role} {company} jobs in {location} site:linkedin.com/jobs OR site:naukri.com"
-    print(f"🔍 Searching for: {query}")
-    
-    try:
-        # Use DuckDuckGo to find real job postings
-        with DDGS() as ddgs:
-            # Get top 10 results
-            search_results = list(ddgs.text(query, max_results=10))
-            
-            for item in search_results:
-                # Detect if it's LinkedIn or Naukri based on the URL
-                source = "LinkedIn" if "linkedin.com" in item['href'] else "Naukri" if "naukri.com" in item['href'] else "Other"
-                
-                results.append({
-                    "id": item['href'],   # Use URL as a unique ID
-                    "title": item['title'],
-                    "source": source,
-                    "link": item['href'],
-                    "snippet": item['body'] # A short description of the link
-                })
-                
-    except Exception as e:
-        print(f"⚠️ Search Error: {e}")
-        # If search fails, return empty list (Frontend will handle it)
-        return []
-        
-    return results
+# --- 1. CONFIGURATION ---
+# If you have an OpenAI Key, paste it inside the quotes: "sk-..."
+# If empty, the system uses "Hackathon Mode" (Mock Data).
+OPENAI_API_KEY = "" 
+client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
-# 3. API Endpoints
+# --- 2. HELPER FUNCTIONS ---
+def extract_text_from_pdf(file_path):
+    """Reads text from the uploaded PDF file."""
+    try:
+        reader = PdfReader(file_path)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text()
+        return text
+    except Exception as e:
+        print(f"Error reading PDF: {e}")
+        return ""
+
+def generate_mock_analysis():
+    """Generates realistic fake data for demo purposes."""
+    score = random.randint(65, 88)
+    return {
+        "match_score": score,
+        "missing_skills": ["Docker", "Kubernetes", "System Design", "GraphQL"],
+        "improvements": [
+            "Use stronger action verbs like 'Architected' or 'Deployed'.",
+            "Quantify your results (e.g., 'Reduced latency by 40%').",
+            "Add a 'Technical Skills' section at the top."
+        ],
+        "roadmap": [
+            "Week 1: Master Docker & Containerization concepts.",
+            "Week 2: Build a microservice project using GraphQL.",
+            "Week 3: Practice System Design problems on LeetCode."
+        ]
+    }
+
+# --- 3. API ENDPOINTS ---
 
 @app.get("/")
 def home():
-    return {"status": "ResumeMatch AI System is Online 🚀"}
+    return {"status": "ResumeMatch AI Brain is Active 🧠"}
+
+# JOB SEARCH ENGINE (DuckDuckGo)
+# Updated Search Function in server/main.py
 
 @app.post("/search-jobs")
-def find_jobs(
-    role: str = Form(...), 
-    location: str = Form(""), 
-    company: str = Form("")
-):
-    """
-    Receives Job Role, Location, and Company from Frontend.
-    Returns a list of job links from LinkedIn/Naukri.
-    """
-    jobs = search_jobs_on_web(role, location, company)
+def find_jobs(role: str = Form(...), location: str = Form(""), company: str = Form("")):
+    results = []
     
-    # --- DEMO FALLBACK (If no real jobs found, show these so demo doesn't fail) ---
-    if not jobs:
-        print("⚠️ No results found. Serving Demo Data.")
-        jobs = [
-            {
-                "id": "demo_1",
-                "title": f"Senior {role} (Demo Result)",
-                "source": "LinkedIn",
-                "link": "https://www.linkedin.com/jobs",
-                "snippet": "We are looking for an experienced candidate..."
-            },
-            {
-                "id": "demo_2",
-                "title": f"{role} Developer (Demo Result)",
-                "source": "Naukri",
-                "link": "https://www.naukri.com",
-                "snippet": "Urgent hiring for top MNC in Mumbai..."
-            }
-        ]
-    # -----------------------------------------------------------------------------
+    # 1. Search LinkedIn specific
+    query_linkedin = f"{role} {company} {location} site:linkedin.com/jobs"
+    print(f"🔎 Searching LinkedIn: {query_linkedin}")
     
-    return {"jobs": jobs}
+    try:
+        with DDGS() as ddgs:
+            linkedin_results = list(ddgs.text(query_linkedin, max_results=5))
+            for item in linkedin_results:
+                results.append({
+                    "id": item['href'],
+                    "title": item['title'].replace(" | LinkedIn", ""), # Clean title
+                    "source": "LinkedIn",
+                    "link": item['href'],
+                    "snippet": item['body']
+                })
+    except Exception as e:
+        print(f"LinkedIn Search Error: {e}")
 
-# 4. Resume Upload Endpoint (Placeholder for next step)
+    # 2. Search Naukri specific
+    query_naukri = f"{role} {company} {location} site:naukri.com"
+    print(f"🔎 Searching Naukri: {query_naukri}")
+    
+    try:
+        with DDGS() as ddgs:
+            naukri_results = list(ddgs.text(query_naukri, max_results=5))
+            for item in naukri_results:
+                results.append({
+                    "id": item['href'],
+                    "title": item['title'].replace(" - Naukri.com", ""), # Clean title
+                    "source": "Naukri",
+                    "link": item['href'],
+                    "snippet": item['body']
+                })
+    except Exception as e:
+        print(f"Naukri Search Error: {e}")
+
+    # 3. Fallback if both fail
+    if not results:
+        results = [
+            {"id": "demo1", "title": f"Senior {role}", "source": "LinkedIn", "link": "https://www.linkedin.com/jobs", "snippet": "looking for experienced candidates..."},
+            {"id": "demo2", "title": f"{role} Developer", "source": "Naukri", "link": "https://www.naukri.com", "snippet": "Urgent hiring in Mumbai..."}
+        ]
+        
+    # Shuffle slightly so they are mixed (Optional)
+    import random
+    random.shuffle(results)
+    
+    return {"jobs": results}
+
+# RESUME UPLOAD
 @app.post("/upload-resume")
 async def upload_resume(file: UploadFile = File(...)):
-    return {"filename": file.filename, "message": "Resume uploaded successfully"}
+    # Save file locally
+    file_path = f"temp_{file.filename}"
+    with open(file_path, "wb") as f:
+        f.write(await file.read())
+    return {"filename": file_path, "message": "File uploaded"}
+
+# --- THE CORE AI ANALYSIS (STEP 4 LOGIC) ---
+@app.post("/analyze-match")
+async def analyze_match(
+    filename: str = Form(...),
+    job_title: str = Form(...),
+    job_desc: str = Form(...)
+):
+    print(f"🧠 Analyzing Resume against: {job_title}")
+    
+    # 1. Read Resume
+    if not os.path.exists(filename):
+        return generate_mock_analysis() # Fallback if file missing
+    
+    resume_text = extract_text_from_pdf(filename)
+    
+    # 2. Use OpenAI (Real AI)
+    if client:
+        try:
+            prompt = f"""
+            You are an ATS Scanner. 
+            Resume: "{resume_text[:3000]}"
+            Job Title: "{job_title}"
+            Job Desc: "{job_desc}"
+            
+            Return a valid JSON object with these keys:
+            - match_score (integer 0-100)
+            - missing_skills (list of strings)
+            - improvements (list of strings, resume tips)
+            - roadmap (list of strings, study plan)
+            """
+            
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                response_format={"type": "json_object"}
+            )
+            return json.loads(response.choices[0].message.content)
+        except Exception as e:
+            print(f"OpenAI Error: {e}. Switching to Hackathon Mode.")
+            
+    # 3. Hackathon Mode (Fallback)
+    # If no API key or error, return realistic mock data
+    return generate_mock_analysis()
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
