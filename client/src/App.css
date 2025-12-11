@@ -1,0 +1,195 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+:root {
+  --primary: #ff4500;       /* Ignite Orange */
+  --primary-dark: #cc3700;
+  --bg-color: #f4f7f6;      /* Lighter, cleaner background */
+  --card-bg: #ffffff;
+  --text-main: #2d3748;
+  --text-light: #718096;
+  --border: #e2e8f0;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  /* This ensures the body takes full height */
+  min-height: 100vh;
+  display: flex;
+  justify-content: center; /* Horizontally center everything */
+  align-items: flex-start; /* Start from top */
+}
+
+/* Main Wrapper - Centered Box */
+.app-container {
+  width: 100%;
+  max-width: 1100px; /* Limits width so it doesn't stretch too far */
+  margin: 40px 20px; /* Top/Bottom margin + Side safety margins */
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header Styling */
+header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+h1 {
+  font-size: 2.5rem;
+  margin: 0;
+  color: var(--primary);
+  font-weight: 800;
+  letter-spacing: -1px;
+}
+
+.subtitle {
+  font-size: 1.1rem;
+  color: var(--text-light);
+  margin-top: 8px;
+}
+
+/* Two-Column Layout */
+.top-section {
+  display: grid;
+  grid-template-columns: 350px 1fr; /* Fixed width for Upload, remaining for Search */
+  gap: 25px;
+  align-items: start;
+}
+
+/* Responsive: Stack columns on smaller screens */
+@media (max-width: 900px) {
+  .top-section {
+    grid-template-columns: 1fr;
+  }
+  .app-container {
+    margin: 20px;
+  }
+}
+
+/* Card Styling */
+.card {
+  background: var(--card-bg);
+  padding: 25px;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--border);
+}
+
+h2 {
+  margin-top: 0;
+  font-size: 1.1rem;
+  color: var(--text-main);
+  border-bottom: 2px solid var(--bg-color);
+  padding-bottom: 12px;
+  margin-bottom: 20px;
+  font-weight: 700;
+}
+
+/* Upload Zone */
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  padding: 50px 20px;
+  text-align: center;
+  cursor: pointer;
+  background: #fafbfc;
+  transition: all 0.2s ease;
+}
+
+.upload-zone:hover {
+  border-color: var(--primary);
+  background: #fff5f2;
+}
+
+.upload-zone p {
+  margin: 10px 0 0;
+  font-size: 0.9rem;
+  color: var(--text-light);
+}
+
+/* Search Bar */
+.search-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+input {
+  flex: 1;
+  padding: 12px 15px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.95rem;
+  outline: none;
+}
+
+input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(255, 69, 0, 0.1);
+}
+
+button.primary-btn {
+  background: var(--primary);
+  color: white;
+  border: none;
+  padding: 0 25px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+button.primary-btn:hover {
+  background: var(--primary-dark);
+}
+
+/* Job Results */
+.job-results-container {
+  max-height: 450px;
+  overflow-y: auto;
+  padding-right: 5px;
+}
+
+.job-card {
+  padding: 15px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  background: white;
+  transition: all 0.2s;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.job-card:hover {
+  border-color: var(--primary);
+  transform: translateX(2px);
+}
+
+.job-card.selected {
+  border: 2px solid var(--primary);
+  background: #fff5f2;
+}
+
+.job-info h3 {
+  margin: 0 0 4px 0;
+  font-size: 1rem;
+  color: #2d3748;
+}
+
+.badge {
+  font-size: 0.7rem;
+  padding: 3px 8px;
+  border-radius: 12px;
+  color: white;
+  font-weight: bold;
+}
+.LinkedIn { background: #0077b5; }
+.Naukri { background: #ffcc00; color: #333; }
+.Other { background: #718096; }
